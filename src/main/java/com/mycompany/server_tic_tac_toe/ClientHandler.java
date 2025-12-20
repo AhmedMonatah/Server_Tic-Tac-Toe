@@ -15,6 +15,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import org.apache.derby.jdbc.ClientDriver;
 import org.json.JSONObject;
+import com.google.gson.Gson; 
 
 /**
  *
@@ -26,12 +27,13 @@ class ClientHandler extends Thread {
     private ObjectInputStream input;
     private ObjectOutputStream output;
     private static Connection con;
+    private Gson gson;
 
     public ClientHandler(Socket clientSocket) {
         this.socket = clientSocket;
+        this.gson = new Gson();
 
     }
-
     static {
         try {
             DriverManager.registerDriver(new ClientDriver());

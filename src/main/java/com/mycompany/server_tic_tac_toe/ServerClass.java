@@ -5,11 +5,11 @@
 package com.mycompany.server_tic_tac_toe;
 
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+//import java.io.ObjectInputStream;
+//import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import org.json.JSONObject;
+//import org.json.JSONObject;
 
 /**
  *
@@ -18,7 +18,7 @@ import org.json.JSONObject;
 public class ServerClass {
 
     ServerSocket serversocket;
-    private boolean isRunning = false;
+    //private boolean isRunning = false;
     private Thread serverThread;
 
     public ServerClass() {

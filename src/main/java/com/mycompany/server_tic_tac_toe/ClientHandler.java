@@ -8,7 +8,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import org.apache.derby.jdbc.ClientDriver;
+import com.google.gson.Gson; 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 
 public class ClientHandler extends Thread {
 
@@ -21,8 +25,16 @@ public class ClientHandler extends Thread {
 
     public ClientHandler(Socket clientSocket) {
         this.socket = clientSocket;
-    }
+    private BufferedReader  input;
+    private BufferedWriter  output;
+    private static Connection con;
+    private Gson gson;
 
+    public ClientHandler(Socket clientSocket) {
+        this.socket = clientSocket;
+        this.gson = new Gson();
+
+    }
     static {
         try {
             DriverManager.registerDriver(new ClientDriver());
@@ -45,6 +57,21 @@ public void run() {
             if (response != null) {
                 sendMessage(response);
             }
+    public void run() {
+        try {
+            input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            output = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+            while (true) {
+                String jsonReq = (String) input.readLine();
+                System.out.println("Received: " + jsonReq);
+
+                String response = processJsonRequest(jsonReq);
+                output.write(response);
+                output.newLine();
+                output.flush();
+            }
+        } catch (IOException ex) {
+            System.getLogger(ClientHandler.class.getName()).log(System.Logger.Level.ERROR, (String) null, ex);
         }
     } catch (IOException ex) {
         System.err.println("Connection lost with user: " + username);

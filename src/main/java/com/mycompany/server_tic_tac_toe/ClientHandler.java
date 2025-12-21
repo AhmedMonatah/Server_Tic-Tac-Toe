@@ -6,13 +6,10 @@ import java.nio.charset.StandardCharsets;
 import java.sql.*;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.apache.derby.jdbc.ClientDriver;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import com.google.gson.Gson; 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
 
 public class ClientHandler extends Thread {
 
@@ -20,74 +17,57 @@ public class ClientHandler extends Thread {
     private BufferedReader reader;
     private BufferedWriter writer;
     private static Connection con;
+
     public static Map<String, ClientHandler> onlineUsers = new ConcurrentHashMap<>();
     private String username;
 
+    // ===== Constructor =====
     public ClientHandler(Socket clientSocket) {
         this.socket = clientSocket;
-    private BufferedReader  input;
-    private BufferedWriter  output;
-    private static Connection con;
-    private Gson gson;
-
-    public ClientHandler(Socket clientSocket) {
-        this.socket = clientSocket;
-        this.gson = new Gson();
-
     }
+
+    // ===== Database connection =====
     static {
         try {
             DriverManager.registerDriver(new ClientDriver());
-            con = DriverManager.getConnection("jdbc:derby://localhost:1527/Users", "root", "root");
+            con = DriverManager.getConnection(
+                    "jdbc:derby://localhost:1527/UserDetails",
+                    "root",
+                    "root"
+            );
         } catch (SQLException ex) {
             ex.printStackTrace();
         }
     }
 
-@Override
-public void run() {
-    try {
-        reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-        writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
-
-        String jsonReq;
-        while ((jsonReq = reader.readLine()) != null) {
-            System.out.println("Received: " + jsonReq);
-            String response = processJsonRequest(jsonReq);
-            if (response != null) {
-                sendMessage(response);
-            }
+    // ===== Thread run =====
+    @Override
     public void run() {
         try {
-            input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            output = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
-            while (true) {
-                String jsonReq = (String) input.readLine();
+            reader = new BufferedReader(
+                    new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8)
+            );
+            writer = new BufferedWriter(
+                    new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8)
+            );
+
+            String jsonReq;
+            while ((jsonReq = reader.readLine()) != null) {
                 System.out.println("Received: " + jsonReq);
 
                 String response = processJsonRequest(jsonReq);
-                output.write(response);
-                output.newLine();
-                output.flush();
+                if (response != null) {
+                    sendMessage(response);
+                }
             }
         } catch (IOException ex) {
-            System.getLogger(ClientHandler.class.getName()).log(System.Logger.Level.ERROR, (String) null, ex);
+            System.err.println("Connection lost with user: " + username);
+        } finally {
+            handleUserDisconnection();
         }
-    } catch (IOException ex) {
-        System.err.println("Connection lost with user: " + username);
-    } finally {
-        handleUserDisconnection();
     }
-}
 
-private void handleUserDisconnection() {
-    if (username != null) {
-        onlineUsers.remove(username);
-        System.out.println(username + " has disconnected.");
-        broadcastUsersList();
-    }
-    cleanup();
-}
+    // ===== Handle requests =====
     private String processJsonRequest(String jsonReq) {
         try {
             JSONObject json = new JSONObject(jsonReq);
@@ -114,31 +94,7 @@ private void handleUserDisconnection() {
         }
     }
 
-        private void handleLogout(JSONObject json) {
-            String user = json.optString("username");
-            if (user != null && !user.isEmpty()) {
-                System.out.println(user + " logged out.");
-
-                onlineUsers.remove(user);
-
-                broadcastUsersList();
-
-                if (username != null && username.equals(user)) {
-                    cleanup();
-                }
-            }
-        }
-        private void cleanup() {
-            try {
-                if (reader != null) reader.close();
-                if (writer != null) writer.close();
-                if (socket != null && !socket.isClosed()) socket.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-
-
+    // ===== Login =====
     private String handleLogin(JSONObject json) {
         try {
             String user = json.getString("username");
@@ -148,170 +104,162 @@ private void handleUserDisconnection() {
             try (PreparedStatement pst = con.prepareStatement(query)) {
                 pst.setString(1, user);
                 pst.setString(2, pass);
+
                 try (ResultSet rs = pst.executeQuery()) {
                     if (rs.next()) {
 
                         if (onlineUsers.containsKey(user)) {
-                            ClientHandler oldClient = onlineUsers.get(user);
-                            oldClient.disconnect();
-                            onlineUsers.remove(user);
+                            onlineUsers.get(user).disconnect();
                         }
 
                         this.username = user;
                         onlineUsers.put(user, this);
 
-                        JSONObject response = new JSONObject();
-                        response.put("action", "login_response");
-                        response.put("success", true);
-                        response.put("message", "Welcome " + user);
                         broadcastUsersList();
-                        return response.toString();
-                    } else {
-                        return createErrorResponse("Invalid username or password", "login");
+
+                        JSONObject res = new JSONObject();
+                        res.put("action", "login_response");
+                        res.put("success", true);
+                        res.put("message", "Welcome " + user);
+                        return res.toString();
                     }
                 }
             }
+            return createErrorResponse("Invalid username or password", "login");
+
         } catch (SQLException ex) {
             return createErrorResponse(ex.getMessage(), "login");
         }
     }
 
-    public void disconnect() {
-        try {
-            if (reader != null) {
-                reader.close();
-            }
-            if (writer != null) {
-                writer.close();
-            }
-            if (socket != null && !socket.isClosed()) {
-                socket.close();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void broadcastUsersList() {
-        JSONArray usersArray;
-        for (Map.Entry<String, ClientHandler> entry : onlineUsers.entrySet()) {
-            ClientHandler ch = entry.getValue();
-            if (!ch.isConnected()) continue;
-
-            usersArray = new JSONArray();
-            for (String user : onlineUsers.keySet()) {
-                if (!user.equals(ch.username)) usersArray.put(user);
-            }
-
-            JSONObject update = new JSONObject();
-            update.put("action", "users_list");
-            update.put("users", usersArray);
-
-            ch.sendMessage(update.toString());
-        }
-    }
-
-
-
-public boolean isConnected() {
-    return socket != null && !socket.isClosed() && socket.isConnected();
-}
-
+    // ===== Register =====
     private String handleRegister(JSONObject json) {
         try {
             String user = json.getString("username");
             String pass = json.getString("password");
 
-            String checkQuery = "SELECT * FROM USERS WHERE NAME=?";
-            try (PreparedStatement pst = con.prepareStatement(checkQuery)) {
+            String check = "SELECT * FROM USERS WHERE NAME=?";
+            try (PreparedStatement pst = con.prepareStatement(check)) {
                 pst.setString(1, user);
-                try (ResultSet rs = pst.executeQuery()) {
-                    if (rs.next()) {
-                        return createErrorResponse("User already exists", "register");
-                    }
+                if (pst.executeQuery().next()) {
+                    return createErrorResponse("User already exists", "register");
                 }
             }
 
-            String insertQuery = "INSERT INTO USERS(NAME,PASSWORD) VALUES(?,?)";
-            try (PreparedStatement insertStmt = con.prepareStatement(insertQuery)) {
-                insertStmt.setString(1, user);
-                insertStmt.setString(2, pass);
-                int r = insertStmt.executeUpdate();
-                if (r > 0) {
-                    JSONObject response = new JSONObject();
-                    response.put("action", "register_response");
-                    response.put("success", true);
-                    response.put("message", "Registered successfully");
-                    return response.toString();
-                } else {
-                    return createErrorResponse("Registration failed", "register");
-                }
+            String insert = "INSERT INTO USERS(NAME,PASSWORD) VALUES(?,?)";
+            try (PreparedStatement pst = con.prepareStatement(insert)) {
+                pst.setString(1, user);
+                pst.setString(2, pass);
+                pst.executeUpdate();
             }
+
+            JSONObject res = new JSONObject();
+            res.put("action", "register_response");
+            res.put("success", true);
+            res.put("message", "Registered successfully");
+            return res.toString();
 
         } catch (SQLException ex) {
             return createErrorResponse(ex.getMessage(), "register");
         }
     }
 
+    // ===== Users list =====
     private String handleGetUsers() {
-        try {
-            JSONArray usersArray = new JSONArray();
+        JSONArray arr = new JSONArray();
+        for (String user : onlineUsers.keySet()) {
+            if (!user.equals(username)) arr.put(user);
+        }
 
+        JSONObject res = new JSONObject();
+        res.put("action", "users_list");
+        res.put("users", arr);
+        return res.toString();
+    }
+
+    private void broadcastUsersList() {
+        for (ClientHandler ch : onlineUsers.values()) {
+            if (!ch.isConnected()) continue;
+
+            JSONArray arr = new JSONArray();
             for (String user : onlineUsers.keySet()) {
-                if (!user.equals(this.username)) {
-                    usersArray.put(user);
-                }
+                if (!user.equals(ch.username)) arr.put(user);
             }
 
-            JSONObject response = new JSONObject();
-            response.put("action", "users_list");
-            response.put("users", usersArray);
-            return response.toString();
+            JSONObject update = new JSONObject();
+            update.put("action", "users_list");
+            update.put("users", arr);
 
-        } catch (Exception ex) {
-            return createErrorResponse(ex.getMessage(), "get_users");
+            ch.sendMessage(update.toString());
         }
     }
 
+    // ===== Game request =====
     private String handleGameRequest(JSONObject json) {
+        String from = json.getString("from");
+        String to = json.getString("to");
+
+        ClientHandler target = onlineUsers.get(to);
+        if (target != null) {
+            JSONObject req = new JSONObject();
+            req.put("action", "game_request");
+            req.put("from", from);
+            target.sendMessage(req.toString());
+        }
+
+        JSONObject ack = new JSONObject();
+        ack.put("action", "game_request_response");
+        ack.put("success", true);
+        return ack.toString();
+    }
+
+    // ===== Logout & cleanup =====
+    private void handleLogout(JSONObject json) {
+        onlineUsers.remove(json.optString("username"));
+        broadcastUsersList();
+        cleanup();
+    }
+
+    private void handleUserDisconnection() {
+        if (username != null) {
+            onlineUsers.remove(username);
+            broadcastUsersList();
+        }
+        cleanup();
+    }
+
+    private void cleanup() {
         try {
-            String fromUser = json.getString("from");
-            String toUser = json.getString("to");
-
-            System.out.println("Game request from " + fromUser + " to " + toUser);
-
-            ClientHandler target = onlineUsers.get(toUser);
-            if (target != null) {
-                JSONObject response = new JSONObject();
-                response.put("action", "game_request");
-                response.put("from", fromUser);
-                target.sendMessage(response.toString());
-            }
-
-            JSONObject ack = new JSONObject();
-            ack.put("action", "game_request_response");
-            ack.put("success", true);
-            ack.put("message", "Request sent to " + toUser);
-            return ack.toString();
-        } catch (Exception ex) {
-            return createErrorResponse(ex.getMessage(), "game_request");
+            if (reader != null) reader.close();
+            if (writer != null) writer.close();
+            if (socket != null && !socket.isClosed()) socket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
-    private String createErrorResponse(String errorMessage, String action) {
-        JSONObject response = new JSONObject();
-        response.put("action", action + "_response");
-        response.put("success", false);
-        response.put("message", errorMessage);
-        return response.toString();
+    public void disconnect() {
+        cleanup();
     }
 
-    private void sendMessage(String message) {
+    public boolean isConnected() {
+        return socket != null && socket.isConnected() && !socket.isClosed();
+    }
+
+    private String createErrorResponse(String msg, String action) {
+        JSONObject res = new JSONObject();
+        res.put("action", action + "_response");
+        res.put("success", false);
+        res.put("message", msg);
+        return res.toString();
+    }
+
+    private void sendMessage(String msg) {
         try {
-            writer.write(message);
+            writer.write(msg);
             writer.newLine();
             writer.flush();
-        } catch (IOException ex) {
+        } catch (IOException e) {
             System.err.println("Failed to send message to " + username);
         }
     }

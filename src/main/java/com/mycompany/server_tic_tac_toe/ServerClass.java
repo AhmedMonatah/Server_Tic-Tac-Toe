@@ -9,6 +9,8 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.json.JSONObject;
 
 /**
@@ -21,6 +23,7 @@ public class ServerClass {
     private boolean isRunning = false;
     private Thread serverThread;
 
+    public static Map<String, ClientHandler> onlineUsers = new ConcurrentHashMap<>();
     public ServerClass() {
 
     }

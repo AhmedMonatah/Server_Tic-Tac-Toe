@@ -21,6 +21,7 @@ public class ServerClass {
     private boolean isRunning = false;
     private Thread serverThread;
 
+    public static Map<String, ClientHandler> onlineUsers = new ConcurrentHashMap<>();
     public ServerClass() {
 
     }

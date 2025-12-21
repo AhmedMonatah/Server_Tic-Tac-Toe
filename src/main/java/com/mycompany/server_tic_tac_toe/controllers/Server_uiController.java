@@ -44,7 +44,7 @@ public class Server_uiController implements Initializable {
     private BarChart<?, ?> barChartGraph;
     @FXML
     private Button startServerButton;
-    ServerClass server; 
+    ServerClass server;
    
 
     /**
@@ -60,8 +60,10 @@ public class Server_uiController implements Initializable {
 
     @FXML
     private void startServer(ActionEvent event) {
-        //ClientHandler(new Socket(5000));
-        server=new ServerClass();
+        
+          if (server == null) {
+              server = new ServerClass();
+           }
         server.startServerFunc();
         startServerButton.setDisable(true);
         stopServerButton.setDisable(false);
@@ -70,6 +72,11 @@ public class Server_uiController implements Initializable {
 
     @FXML
     private void stopServer(ActionEvent event) {
+          if (server != null) {
+            server.stopServerFunc();
+         }
+          startServerButton.setDisable(false);
+          stopServerButton.setDisable(true);
     }
 
     @FXML

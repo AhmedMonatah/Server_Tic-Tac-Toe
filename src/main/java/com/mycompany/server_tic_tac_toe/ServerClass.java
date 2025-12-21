@@ -18,7 +18,7 @@ import java.net.Socket;
 public class ServerClass {
 
     ServerSocket serversocket;
-    //private boolean isRunning = false;
+    private boolean isRunning = false;
     private Thread serverThread;
 
     public ServerClass() {
@@ -46,6 +46,18 @@ public class ServerClass {
         serverThread.start();
 
         
+    }
+     public void stopServerFunc() {
+        isRunning = false;
+
+        try {
+            if (serversocket != null && !serversocket.isClosed()) {
+                serversocket.close();
+                System.out.println("Server closed come again tommorow");
+            }
+        } catch (IOException ex) {
+            System.getLogger(ServerClass.class.getName()).log(System.Logger.Level.ERROR, (String) null, ex);
+        }
     }
 
 }

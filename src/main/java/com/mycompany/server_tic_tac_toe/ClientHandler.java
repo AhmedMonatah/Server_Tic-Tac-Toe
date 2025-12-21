@@ -16,6 +16,10 @@ import java.sql.SQLException;
 import org.apache.derby.jdbc.ClientDriver;
 import org.json.JSONObject;
 import com.google.gson.Gson; 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 
 /**
  *
@@ -24,8 +28,8 @@ import com.google.gson.Gson;
 class ClientHandler extends Thread {
 
     private Socket socket;
-    private ObjectInputStream input;
-    private ObjectOutputStream output;
+    private BufferedReader  input;
+    private BufferedWriter  output;
     private static Connection con;
     private Gson gson;
 
@@ -45,17 +49,18 @@ class ClientHandler extends Thread {
 
     public void run() {
         try {
-            input = new ObjectInputStream(socket.getInputStream());
-            output = new ObjectOutputStream(socket.getOutputStream());
+            input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            output = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
             while (true) {
-                String jsonReq = (String) input.readObject();
+                String jsonReq = (String) input.readLine();
                 System.out.println("Received: " + jsonReq);
 
                 String response = processJsonRequest(jsonReq);
+                output.write(response);
+                output.newLine();
+                output.flush();
             }
         } catch (IOException ex) {
-            System.getLogger(ClientHandler.class.getName()).log(System.Logger.Level.ERROR, (String) null, ex);
-        } catch (ClassNotFoundException ex) {
             System.getLogger(ClientHandler.class.getName()).log(System.Logger.Level.ERROR, (String) null, ex);
         }
     }
@@ -71,7 +76,7 @@ class ClientHandler extends Thread {
             return handleLogin(username, password);
         }
         if (json.getString("action").equals("register")) {
-            return handleLogin(username, password);
+            return handleRegister(username, password);
         }
         return "sds";
 
@@ -79,7 +84,7 @@ class ClientHandler extends Thread {
 
     private String handleRegister(String username, String password)  {
         try {
-            String query = "SELECT * FROM USERS WHERE USERNAME=?";
+            String query = "SELECT * FROM USERS WHERE NAME=?";
             PreparedStatement pst = con.prepareStatement(query);
             pst.setString(1, username);
             ResultSet rs = pst.executeQuery();
@@ -110,7 +115,7 @@ class ClientHandler extends Thread {
 
     private String handleLogin(String username, String password) {
         try {
-            String query = "SELECT * FROM USERS WHERE USERNAME=? AND PASSWORD=?";
+            String query = "SELECT * FROM USERS WHERE NAME=? AND PASSWORD=?";
             PreparedStatement pst = con.prepareStatement(query);
             pst.setString(1, username);
             pst.setString(2, password);

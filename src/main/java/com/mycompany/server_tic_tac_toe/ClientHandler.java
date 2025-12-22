@@ -31,7 +31,7 @@ public class ClientHandler extends Thread {
         try {
             DriverManager.registerDriver(new ClientDriver());
             con = DriverManager.getConnection(
-                    "jdbc:derby://localhost:1527/UserDetails",
+                    "jdbc:derby://localhost:1527/Users",
                     "root",
                     "root"
             );

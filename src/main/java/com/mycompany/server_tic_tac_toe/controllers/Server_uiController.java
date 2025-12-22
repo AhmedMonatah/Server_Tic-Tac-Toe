@@ -6,9 +6,6 @@
 package com.mycompany.server_tic_tac_toe.controllers;
 //import com.mycompany.server_tic_tac_toe.ClientHandler;
 
-
-
-
 import com.mycompany.server_tic_tac_toe.ServerClass;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -41,11 +38,12 @@ public class Server_uiController implements Initializable {
     @FXML
     private Text totalNum;
     @FXML
-    private BarChart<?, ?> barChartGraph;
+    private BarChart<String, Number> barChartGraph;
     @FXML
     private Button startServerButton;
-    ServerClass server;
-   
+
+    private ServerClass server;
+    private javafx.animation.Timeline timeline;
 
     /**
      * Initializes the controller class.
@@ -53,34 +51,83 @@ public class Server_uiController implements Initializable {
     @Override
     public void initialize(URL url, ResourceBundle rb) {
         stopServerButton.setDisable(true);
-        //statusLabel.setText("Server stopped");
-       
-        
-    }    
+        // Initialize BarChart
+        javafx.scene.chart.XYChart.Series<String, Number> series = new javafx.scene.chart.XYChart.Series<>();
+        series.setName("Players");
+        series.getData().add(new javafx.scene.chart.XYChart.Data<>("Online", 0));
+        series.getData().add(new javafx.scene.chart.XYChart.Data<>("Offline", 0));
+        barChartGraph.getData().add(series);
+
+        // Setup Timeline for periodic updates (every 2 seconds)
+        timeline = new javafx.animation.Timeline(
+                new javafx.animation.KeyFrame(javafx.util.Duration.seconds(2), event -> updateDashboard()));
+        timeline.setCycleCount(javafx.animation.Animation.INDEFINITE);
+    }
 
     @FXML
     private void startServer(ActionEvent event) {
-        
-          if (server == null) {
-              server = new ServerClass();
-           }
+
+        if (server == null) {
+            server = new ServerClass();
+        }
         server.startServerFunc();
+        startMonitoring();
+
         startServerButton.setDisable(true);
         stopServerButton.setDisable(false);
-        
+
     }
 
     @FXML
     private void stopServer(ActionEvent event) {
-          if (server != null) {
+        if (server != null) {
             server.stopServerFunc();
-         }
-          startServerButton.setDisable(false);
-          stopServerButton.setDisable(true);
+        }
+        stopMonitoring();
+
+        startServerButton.setDisable(false);
+        stopServerButton.setDisable(true);
     }
 
     @FXML
     private void barChartFunc(MouseEvent event) {
     }
-    
+
+    private void startMonitoring() {
+        if (timeline != null) {
+            timeline.play();
+        }
+    }
+
+    private void stopMonitoring() {
+        if (timeline != null) {
+            timeline.stop();
+        }
+    }
+
+    private void updateDashboard() {
+        // Fetch data
+        int onlineCount = com.mycompany.server_tic_tac_toe.ClientHandler.onlineUsers.size();
+        int totalCount = com.mycompany.server_tic_tac_toe.DOA.getTotalPlayers();
+        int offlineCount = totalCount - onlineCount;
+        if (offlineCount < 0)
+            offlineCount = 0; // Safety check
+
+        // Update Text fields
+        numOfOnline.setText(String.valueOf(onlineCount));
+        numOfOffline.setText(String.valueOf(offlineCount));
+        totalNum.setText(String.valueOf(totalCount));
+
+        // Update BarChart
+        if (!barChartGraph.getData().isEmpty()) {
+            javafx.scene.chart.XYChart.Series<String, Number> series = barChartGraph.getData().get(0);
+            for (javafx.scene.chart.XYChart.Data<String, Number> data : series.getData()) {
+                if ("Online".equals(data.getXValue())) {
+                    data.setYValue(onlineCount);
+                } else if ("Offline".equals(data.getXValue())) {
+                    data.setYValue(offlineCount);
+                }
+            }
+        }
+    }
 }

@@ -99,7 +99,7 @@
          <top>
             <HBox alignment="CENTER" BorderPane.alignment="CENTER">
                <children>
-                  <Button fx:id="startServerButtom" alignment="CENTER" contentDisplay="CENTER" mnemonicParsing="false" onAction="#startServer" prefHeight="62.0" prefWidth="146.0" style="-fx-background-color: linear-gradient(to right, #22c55e, #16a34a); -fx-background-radius: 20; -fx-border-color: white; -fx-border-radius: 20;" text="Start" textAlignment="JUSTIFY" textFill="WHITE">
+                  <Button fx:id="startServerButton" alignment="CENTER" contentDisplay="CENTER" mnemonicParsing="false" onAction="#startServer" prefHeight="62.0" prefWidth="146.0" style="-fx-background-color: linear-gradient(to right, #22c55e, #16a34a); -fx-background-radius: 20; -fx-border-color: white; -fx-border-radius: 20;" text="Start" textAlignment="JUSTIFY" textFill="WHITE">
                      <font>
                         <Font name="System Bold" size="25.0" />
                      </font>

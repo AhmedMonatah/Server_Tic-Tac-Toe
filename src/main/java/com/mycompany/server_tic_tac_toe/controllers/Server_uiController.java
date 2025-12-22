@@ -4,23 +4,25 @@
  */
 
 package com.mycompany.server_tic_tac_toe.controllers;
-//import com.mycompany.server_tic_tac_toe.ClientHandler;
 
+import com.mycompany.server_tic_tac_toe.ClientHandler;
+import com.mycompany.server_tic_tac_toe.DOA;
 import com.mycompany.server_tic_tac_toe.ServerClass;
-import java.io.IOException;
-import java.net.InetAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
 import java.net.URL;
-import java.net.UnknownHostException;
 import java.util.ResourceBundle;
+import javafx.animation.Animation;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.chart.BarChart;
+import javafx.scene.chart.XYChart.Data;
+import javafx.scene.chart.XYChart.Series;
 import javafx.scene.control.Button;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.text.Text;
+import javafx.util.Duration;
 
 /**
  * FXML Controller class
@@ -51,17 +53,17 @@ public class Server_uiController implements Initializable {
     @Override
     public void initialize(URL url, ResourceBundle rb) {
         stopServerButton.setDisable(true);
-        // Initialize BarChart
-        javafx.scene.chart.XYChart.Series<String, Number> series = new javafx.scene.chart.XYChart.Series<>();
+        
+        Series<String, Number> series = new Series<>();
         series.setName("Players");
-        series.getData().add(new javafx.scene.chart.XYChart.Data<>("Online", 0));
-        series.getData().add(new javafx.scene.chart.XYChart.Data<>("Offline", 0));
+        series.getData().add(new Data<>("Online", 0));
+        series.getData().add(new Data<>("Offline", 0));
         barChartGraph.getData().add(series);
 
         // Setup Timeline for periodic updates (every 2 seconds)
-        timeline = new javafx.animation.Timeline(
-                new javafx.animation.KeyFrame(javafx.util.Duration.seconds(2), event -> updateDashboard()));
-        timeline.setCycleCount(javafx.animation.Animation.INDEFINITE);
+        timeline = new Timeline(
+                new KeyFrame(Duration.seconds(2), event -> updateDashboard()));
+        timeline.setCycleCount(Animation.INDEFINITE);
     }
 
     @FXML
@@ -107,21 +109,20 @@ public class Server_uiController implements Initializable {
 
     private void updateDashboard() {
         // Fetch data
-        int onlineCount = com.mycompany.server_tic_tac_toe.ClientHandler.onlineUsers.size();
-        int totalCount = com.mycompany.server_tic_tac_toe.DOA.getTotalPlayers();
+        int onlineCount = ClientHandler.onlineUsers.size();
+        int totalCount = DOA.getTotalPlayers();
         int offlineCount = totalCount - onlineCount;
-        if (offlineCount < 0)
-            offlineCount = 0; // Safety check
+        
+        if (offlineCount < 0) {offlineCount = 0;}
 
-        // Update Text fields
         numOfOnline.setText(String.valueOf(onlineCount));
         numOfOffline.setText(String.valueOf(offlineCount));
         totalNum.setText(String.valueOf(totalCount));
 
         // Update BarChart
         if (!barChartGraph.getData().isEmpty()) {
-            javafx.scene.chart.XYChart.Series<String, Number> series = barChartGraph.getData().get(0);
-            for (javafx.scene.chart.XYChart.Data<String, Number> data : series.getData()) {
+            Series<String, Number> series = barChartGraph.getData().get(0);
+            for (Data<String, Number> data : series.getData()) {
                 if ("Online".equals(data.getXValue())) {
                     data.setYValue(onlineCount);
                 } else if ("Offline".equals(data.getXValue())) {

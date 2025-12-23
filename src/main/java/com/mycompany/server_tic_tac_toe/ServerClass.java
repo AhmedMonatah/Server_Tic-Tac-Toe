@@ -5,13 +5,10 @@
 package com.mycompany.server_tic_tac_toe;
 
 import java.io.IOException;
-//import java.io.ObjectInputStream;
-//import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-//import org.json.JSONObject;
 
 /**
  *
@@ -30,18 +27,24 @@ public class ServerClass {
 
     public void startServerFunc() {
         //Socket socket;
+        isRunning = true;
         serverThread = new Thread(new Runnable() {
             public void run() {
                 try {
                     serversocket = new ServerSocket(5001);
                     System.out.println("Server started on port 5005");
-                    while(true){
+                    
+                    
+                    while(isRunning){
                        Socket socket=serversocket.accept();
                         new ClientHandler(socket).start();
-                        
                     }
                 } catch (IOException ex) {
-                    System.getLogger(ServerClass.class.getName()).log(System.Logger.Level.ERROR, (String) null, ex);
+                    if (isRunning) {
+                        System.getLogger(ServerClass.class.getName()).log(System.Logger.Level.ERROR, (String) null, ex);
+                    } else {
+                        System.out.println("Server stopped successfully.");
+                    }
                 }
 
             }

@@ -31,7 +31,7 @@ public class ServerClass {
         serverThread = new Thread(new Runnable() {
             public void run() {
                 try {
-                    serversocket = new ServerSocket(5005);
+                    serversocket = new ServerSocket(5001);
                     System.out.println("Server started on port 5005");
                     
                     

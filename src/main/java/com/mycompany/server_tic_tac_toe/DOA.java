@@ -19,7 +19,7 @@ public class DOA {
     static{
         try {
             DriverManager.registerDriver(new ClientDriver());
-             con=DriverManager.getConnection("jdbc:derby://localhost:1527/UserDetails", "root", "root");
+            con=DriverManager.getConnection("jdbc:derby://localhost:1527/UserDetails", "root", "root");
         } catch (SQLException ex) {
             System.getLogger(DOA.class.getName()).log(System.Logger.Level.ERROR, (String) null, ex);
         }

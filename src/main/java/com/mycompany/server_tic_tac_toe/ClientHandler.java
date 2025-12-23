@@ -53,7 +53,7 @@ public class ClientHandler extends Thread {
 
             String jsonReq;
             while ((jsonReq = reader.readLine()) != null) {
-                System.out.println("Received: " + jsonReq);
+                System.out.println("Server Received: " + jsonReq);
 
                 String response = processJsonRequest(jsonReq);
                 if (response != null) {
@@ -82,6 +82,8 @@ public class ClientHandler extends Thread {
                     return handleGetUsers();
                 case "game_request":
                     return handleGameRequest(json);
+                case "request_resonse":
+                    return handleRequestResonse(json);
                 case "logout":
                     handleLogout(json);
                     return null;
@@ -120,7 +122,7 @@ public class ClientHandler extends Thread {
                         JSONObject res = new JSONObject();
                         res.put("action", "login_response");
                         res.put("success", true);
-                        res.put("message", "Welcome " + user);
+                        res.put("username",user);
                         return res.toString();
                     }
                 }
@@ -156,7 +158,7 @@ public class ClientHandler extends Thread {
             JSONObject res = new JSONObject();
             res.put("action", "register_response");
             res.put("success", true);
-            res.put("message", "Registered successfully");
+            res.put("username", user);
             return res.toString();
 
         } catch (SQLException ex) {
@@ -198,15 +200,35 @@ public class ClientHandler extends Thread {
     private String handleGameRequest(JSONObject json) {
         String from = json.getString("from");
         String to = json.getString("to");
-
+        System.out.println("from "+ from +" to "+ to);
         ClientHandler target = onlineUsers.get(to);
         if (target != null) {
             JSONObject req = new JSONObject();
-            req.put("action", "game_request");
+            req.put("action", "show_game_request");
             req.put("from", from);
+            req.put("to",to);
             target.sendMessage(req.toString());
         }
-
+        
+        JSONObject ack = new JSONObject();
+        ack.put("action", "game_request_response");
+        ack.put("success", true);
+        return ack.toString();
+    }
+    private String handleRequestResonse(JSONObject json) {
+        String from = json.getString("from");
+        String to = json.getString("to");
+        String response = json.getString("response");
+        ClientHandler target = onlineUsers.get(from);
+        if (target != null) {
+            JSONObject req = new JSONObject();
+            req.put("action", "request_response");
+            req.put("to", to);
+            req.put("from", from);
+            req.put("response",response);
+            target.sendMessage(req.toString());
+        }
+        
         JSONObject ack = new JSONObject();
         ack.put("action", "game_request_response");
         ack.put("success", true);

@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.*;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import javafx.application.Platform;
 
 import org.apache.derby.jdbc.ClientDriver;
 import org.json.JSONArray;
@@ -82,11 +83,20 @@ public class ClientHandler extends Thread {
                     return handleGetUsers();
                 case "game_request":
                     return handleGameRequest(json);
-                case "request_resonse":
+                case "request_response":
                     return handleRequestResonse(json);
                 case "logout":
                     handleLogout(json);
                     return null;
+                case "game_move":
+                    return handleGameMove(json);
+                case "new_round_request":
+                case "new_round_accept":
+                case "new_round_decline":
+                case "player_left":
+                    return handleForwarding(json);
+                case "new_round":
+                    return handleNewRound(json);
                 default:
                     return createErrorResponse("Unknown action", action);
             }
@@ -219,7 +229,7 @@ public class ClientHandler extends Thread {
         String from = json.getString("from");
         String to = json.getString("to");
         String response = json.getString("response");
-        ClientHandler target = onlineUsers.get(from);
+        ClientHandler target = onlineUsers.get(to);
         if (target != null) {
             JSONObject req = new JSONObject();
             req.put("action", "request_response");
@@ -227,6 +237,9 @@ public class ClientHandler extends Thread {
             req.put("from", from);
             req.put("response",response);
             target.sendMessage(req.toString());
+            System.out.println("Forwarding response to: " + to);
+        } else {
+            System.out.println("Target user " + to + " not found or offline.");
         }
         
         JSONObject ack = new JSONObject();
@@ -284,5 +297,45 @@ public class ClientHandler extends Thread {
         } catch (IOException e) {
             System.err.println("Failed to send message to " + username);
         }
+    }
+    
+    // Game Move
+    private String handleGameMove(JSONObject json) {
+        String to = json.getString("to");
+        ClientHandler target = onlineUsers.get(to);
+
+        if (target != null) {
+            target.sendMessage(json.toString()); 
+            System.out.println("Forwarding move to: " + to);
+        }
+
+        JSONObject ack = new JSONObject();
+        ack.put("action", "game_move_response");
+        ack.put("success", true);
+        return ack.toString();
+    }
+    
+    private String handleNewRound(JSONObject json) {
+        String to = json.getString("to");
+        ClientHandler target = onlineUsers.get(to);
+
+        if (target != null) {
+            target.sendMessage(json.toString()); 
+            System.out.println("Forwarding New Round request to: " + to);
+        }
+
+        JSONObject ack = new JSONObject();
+        ack.put("action", "new_round_response");
+        ack.put("success", true);
+        return ack.toString();
+    }
+    
+    private String handleForwarding(JSONObject json) {
+        String to = json.getString("to");
+        ClientHandler target = onlineUsers.get(to);
+        if (target != null) {
+            target.sendMessage(json.toString());
+        }
+        return new JSONObject().put("success", true).toString();
     }
 }

@@ -4,8 +4,6 @@
  */
 
 package com.mycompany.server_tic_tac_toe.controllers;
-
-import com.mycompany.server_tic_tac_toe.ClientHandler;
 import com.mycompany.server_tic_tac_toe.DOA;
 import com.mycompany.server_tic_tac_toe.ServerClass;
 import java.net.URL;
@@ -108,27 +106,31 @@ public class Server_uiController implements Initializable {
     }
 
     private void updateDashboard() {
-        // Fetch data
-        int onlineCount = ClientHandler.onlineUsers.size();
+
+        if (server == null) return;
+
+        int onlineCount = server.getOnlineUsers().size();
         int totalCount = DOA.getTotalPlayers();
         int offlineCount = totalCount - onlineCount;
-        
-        if (offlineCount < 0) {offlineCount = 0;}
+
+        if (offlineCount < 0) offlineCount = 0;
 
         numOfOnline.setText(String.valueOf(onlineCount));
         numOfOffline.setText(String.valueOf(offlineCount));
         totalNum.setText(String.valueOf(totalCount));
 
-        // Update BarChart
         if (!barChartGraph.getData().isEmpty()) {
             Series<String, Number> series = barChartGraph.getData().get(0);
             for (Data<String, Number> data : series.getData()) {
                 if ("Online".equals(data.getXValue())) {
                     data.setYValue(onlineCount);
+                    data.getNode().setStyle("-fx-bar-fill: green;");
                 } else if ("Offline".equals(data.getXValue())) {
                     data.setYValue(offlineCount);
+                    data.getNode().setStyle("-fx-bar-fill: red;");
                 }
             }
         }
     }
+
 }

@@ -7,8 +7,12 @@ package com.mycompany.server_tic_tac_toe;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.apache.derby.jdbc.ClientDriver;
 
 /**
  *
@@ -16,54 +20,65 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ServerClass {
 
-    ServerSocket serversocket;
-    private boolean isRunning = false;
-    private Thread serverThread;
+    private ServerSocket serverSocket;
+    private boolean isRunning;
 
-    public static Map<String, ClientHandler> onlineUsers = new ConcurrentHashMap<>();
+    private final Map<String, ClientHandler> onlineUsers = new ConcurrentHashMap<>();
+    private Connection con;
+
     public ServerClass() {
-
+        connectDB();
     }
-
-    public void startServerFunc() {
-        //Socket socket;
-        isRunning = true;
-        serverThread = new Thread(new Runnable() {
-            public void run() {
-                try {
-                    serversocket = new ServerSocket(5001);
-                    System.out.println("Server started on port 5005");
-                    
-                    
-                    while(isRunning){
-                       Socket socket=serversocket.accept();
-                        new ClientHandler(socket).start();
-                    }
-                } catch (IOException ex) {
-                    if (isRunning) {
-                        System.getLogger(ServerClass.class.getName()).log(System.Logger.Level.ERROR, (String) null, ex);
-                    } else {
-                        System.out.println("Server stopped successfully.");
-                    }
-                }
-
-            }
-        });
-        serverThread.start();
-
-        
+    public Map<String, ClientHandler> getOnlineUsers() {
+        return onlineUsers;
     }
-     public void stopServerFunc() {
-        isRunning = false;
-
+    private void connectDB() {
         try {
-            if (serversocket != null && !serversocket.isClosed()) {
-                serversocket.close();
-                System.out.println("Server closed come again tommorow");
-            }
-        } catch (IOException ex) {
-            System.getLogger(ServerClass.class.getName()).log(System.Logger.Level.ERROR, (String) null, ex);
+            DriverManager.registerDriver(new ClientDriver());
+            con = DriverManager.getConnection(
+                    "jdbc:derby://localhost:1527/Users",
+                    "root",
+                    "root"
+            );
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
     }
 
+    public Connection getConnection() {
+        return con;
+    }
+
+
+    public void startServerFunc() {
+        isRunning = true;
+
+        new Thread(() -> {
+            try {
+                serverSocket = new ServerSocket(5001);
+                while (isRunning) {
+                    Socket socket = serverSocket.accept();
+                    new ClientHandler(socket, this).start();
+                }
+            } catch (IOException e) {
+                if (isRunning) e.printStackTrace();
+            }
+        }).start();
+    }
+
+    public void stopServerFunc() {
+        isRunning = false;
+
+        for (ClientHandler ch : onlineUsers.values()) {
+            ch.closeConnection();
+        }
+        onlineUsers.clear();
+
+        try {
+            if (serverSocket != null) serverSocket.close();
+            if (con != null) con.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 }

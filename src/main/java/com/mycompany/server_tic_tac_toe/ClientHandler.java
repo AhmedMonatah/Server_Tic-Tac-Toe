@@ -1,4 +1,5 @@
 package com.mycompany.server_tic_tac_toe;
+
 import java.io.*;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -26,11 +27,9 @@ public class ClientHandler extends Thread {
     public void run() {
         try {
             reader = new BufferedReader(
-                    new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8)
-            );
+                    new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
             writer = new BufferedWriter(
-                    new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8)
-            );
+                    new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
 
             String jsonReq;
             while (!socket.isClosed() && (jsonReq = reader.readLine()) != null) {
@@ -58,6 +57,8 @@ public class ClientHandler extends Thread {
                     return handleLogin(json);
                 case "register":
                     return handleRegister(json);
+                case "update_score":
+                    return handleUpdateScore(json);
                 case "get_users":
                     return handleGetUsers();
                 case "game_request":
@@ -88,50 +89,49 @@ public class ClientHandler extends Thread {
     }
 
     private String handleLogin(JSONObject json) {
-       try {
-           String user = json.getString("username");
-           String pass = json.getString("password");
+        try {
+            String user = json.getString("username");
+            String pass = json.getString("password");
 
-           String query = "SELECT * FROM USERS WHERE NAME=? AND PASSWORD=?";
-           try (PreparedStatement pst = con.prepareStatement(query)) {
-               pst.setString(1, user);
-               pst.setString(2, pass);
+            String query = "SELECT * FROM USERS WHERE NAME=? AND PASSWORD=?";
+            try (PreparedStatement pst = con.prepareStatement(query)) {
+                pst.setString(1, user);
+                pst.setString(2, pass);
 
-               try (ResultSet rs = pst.executeQuery()) {
-                   if (rs.next()) {
+                try (ResultSet rs = pst.executeQuery()) {
+                    if (rs.next()) {
 
-                       if (server.getOnlineUsers().containsKey(user)) {
-                           return createErrorResponse("This account is already logged in", "login");
-                       }
+                        if (server.getOnlineUsers().containsKey(user)) {
+                            return createErrorResponse("This account is already logged in", "login");
+                        }
 
-                       this.username = user;
-                       server.getOnlineUsers().put(user, this);
-                       
-                       // Ensure user is marked as available on login
-                       updateAvailability(user, true);
+                        this.username = user;
+                        server.getOnlineUsers().put(user, this);
 
-                       broadcastUsersList();
+                        // Ensure user is marked as available on login
+                        updateAvailability(user, true);
 
-                       JSONObject res = new JSONObject();
-                       res.put("action", "login_response");
-                       res.put("success", true);
-                       res.put("username", user);
-                       return res.toString();
-                   }
-               }
-           }
-           return createErrorResponse("Invalid username or password", "login");
+                        broadcastUsersList();
 
-       } catch (SQLException ex) {
-           return createErrorResponse(ex.getMessage(), "login");
-       }
-   }
+                        JSONObject res = new JSONObject();
+                        res.put("action", "login_response");
+                        res.put("success", true);
+                        res.put("username", user);
+                        return res.toString();
+                    }
+                }
+            }
+            return createErrorResponse("Invalid username or password", "login");
 
+        } catch (SQLException ex) {
+            return createErrorResponse(ex.getMessage(), "login");
+        }
+    }
 
     private String handleRegister(JSONObject json) {
         try {
             String user = json.getString("username");
-            String email = json.getString("email"); 
+            String email = json.getString("email");
             String pass = json.getString("password");
 
             String check = "SELECT * FROM USERS WHERE NAME=? OR EMAIL=?";
@@ -162,24 +162,26 @@ public class ClientHandler extends Thread {
         }
     }
 
-
     private String handleGetUsers() {
         JSONArray arr = new JSONArray();
 
-        String sql = "SELECT NAME, IS_AVAILABLE FROM USERS";
+        String sql = "SELECT NAME, IS_AVAILABLE, COALESCE(SCORE, 0) as SCORE FROM USERS";
 
         try (PreparedStatement pst = con.prepareStatement(sql);
-             ResultSet rs = pst.executeQuery()) {
+                ResultSet rs = pst.executeQuery()) {
 
             while (rs.next()) {
                 String name = rs.getString("NAME");
 
-                if (!server.getOnlineUsers().containsKey(name)) continue;
-                if (name.equals(username)) continue;
+                if (!server.getOnlineUsers().containsKey(name))
+                    continue;
+                if (name.equals(username))
+                    continue;
 
                 JSONObject userObj = new JSONObject();
                 userObj.put("username", name);
                 userObj.put("is_available", rs.getInt("IS_AVAILABLE") == 1);
+                userObj.put("score", rs.getInt("SCORE"));
 
                 arr.put(userObj);
             }
@@ -194,7 +196,6 @@ public class ClientHandler extends Thread {
         return res.toString();
     }
 
-
     public void broadcastUsersList() {
         JSONArray arr = new JSONArray();
 
@@ -202,11 +203,14 @@ public class ClientHandler extends Thread {
         for (String user : server.getOnlineUsers().keySet()) {
 
             boolean isAvailable = true;
-            try (PreparedStatement pst = con.prepareStatement("SELECT IS_AVAILABLE FROM USERS WHERE NAME=?")) {
+            int score = 0;
+            try (PreparedStatement pst = con
+                    .prepareStatement("SELECT IS_AVAILABLE, COALESCE(SCORE, 0) as SCORE FROM USERS WHERE NAME=?")) {
                 pst.setString(1, user);
                 ResultSet rs = pst.executeQuery();
                 if (rs.next()) {
                     isAvailable = rs.getInt("IS_AVAILABLE") == 1;
+                    score = rs.getInt("SCORE");
                 }
             } catch (SQLException e) {
                 e.printStackTrace();
@@ -215,12 +219,14 @@ public class ClientHandler extends Thread {
             JSONObject userObj = new JSONObject();
             userObj.put("username", user);
             userObj.put("is_available", isAvailable);
+            userObj.put("score", score);
 
             arr.put(userObj);
         }
 
         for (ClientHandler ch : server.getOnlineUsers().values()) {
-            if (!ch.isConnected()) continue;
+            if (!ch.isConnected())
+                continue;
             JSONArray filteredArr = new JSONArray();
             // Send list of *other* users
             for (int i = 0; i < arr.length(); i++) {
@@ -235,8 +241,6 @@ public class ClientHandler extends Thread {
             ch.sendMessage(update.toString());
         }
     }
-
-
 
     private String handleGameRequest(JSONObject json) {
         String from = json.getString("from");
@@ -270,13 +274,14 @@ public class ClientHandler extends Thread {
                 .toString();
     }
 
-
-
     private void cleanup() {
         try {
-            if (reader != null) reader.close();
-            if (writer != null) writer.close();
-            if (socket != null && !socket.isClosed()) socket.close();
+            if (reader != null)
+                reader.close();
+            if (writer != null)
+                writer.close();
+            if (socket != null && !socket.isClosed())
+                socket.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -307,13 +312,13 @@ public class ClientHandler extends Thread {
             System.err.println("Failed to send message to " + username);
         }
     }
-    
+
     private String handleGameMove(JSONObject json) {
         String to = json.getString("to");
         ClientHandler target = server.getOnlineUsers().get(to);
 
         if (target != null) {
-            target.sendMessage(json.toString()); 
+            target.sendMessage(json.toString());
             System.out.println("Forwarding move to: " + to);
         }
 
@@ -322,13 +327,13 @@ public class ClientHandler extends Thread {
         ack.put("success", true);
         return ack.toString();
     }
-    
+
     private String handleNewRound(JSONObject json) {
         String to = json.getString("to");
         ClientHandler target = server.getOnlineUsers().get(to);
 
         if (target != null) {
-            target.sendMessage(json.toString()); 
+            target.sendMessage(json.toString());
             System.out.println("Forwarding New Round request to: " + to);
         }
 
@@ -337,7 +342,7 @@ public class ClientHandler extends Thread {
         ack.put("success", true);
         return ack.toString();
     }
-    
+
     private String handleForwarding(JSONObject json) {
         String to = json.getString("to");
         ClientHandler target = server.getOnlineUsers().get(to);
@@ -346,7 +351,7 @@ public class ClientHandler extends Thread {
         }
         return new JSONObject().put("success", true).toString();
     }
-    
+
     private String handlePlayerLeft(JSONObject json) {
         String to = json.optString("to"); // Opponent name
 
@@ -356,7 +361,7 @@ public class ClientHandler extends Thread {
 
         if (to != null && !to.isEmpty()) {
             updateAvailability(to, true);
-            
+
             // 3. Notify opponent
             ClientHandler target = server.getOnlineUsers().get(to);
             if (target != null) {
@@ -371,13 +376,43 @@ public class ClientHandler extends Thread {
                 .put("success", true)
                 .toString();
     }
-    
+
+    private String handleUpdateScore(JSONObject json) {
+        String user = json.getString("username");
+        System.out.println("Updating score for user: " + user); // Debug log
+
+        // Update score in DB
+        String update = "UPDATE USERS SET SCORE = COALESCE(SCORE, 0) + 10 WHERE NAME = ?";
+        try (PreparedStatement pst = con.prepareStatement(update)) {
+            pst.setString(1, user);
+            int rowsAffected = pst.executeUpdate();
+            System.out.println("Rows updated: " + rowsAffected); // Debug log
+
+            if (rowsAffected == 0) {
+                System.err.println("Score update failed: User not found or no change.");
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return createErrorResponse("Failed to update score", "update_score");
+        }
+
+        // Broadcast new scores to all users
+        broadcastUsersList();
+        System.out.println("Boardcast sent after score update.");
+
+        return new JSONObject()
+                .put("action", "update_score_response")
+                .put("success", true)
+                .toString();
+    }
+
     public void closeConnection() {
         try {
             if (socket != null && !socket.isClosed()) {
                 socket.close();
             }
-            interrupt(); 
+            interrupt();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -394,20 +429,19 @@ public class ClientHandler extends Thread {
         }
     }
 
-
     private void handleLogout(JSONObject json) {
         String user = json.optString("username");
         server.getOnlineUsers().remove(user);
-        updateAvailability(user, true); 
-        broadcastUsersList(); 
-        
+        updateAvailability(user, true);
+        broadcastUsersList();
+
         cleanup();
     }
 
     private void handleUserDisconnection() {
         if (username != null) {
             server.getOnlineUsers().remove(username);
-            updateAvailability(username, true); // Reset status 
+            updateAvailability(username, true); // Reset status
             broadcastUsersList();
         }
         cleanup();

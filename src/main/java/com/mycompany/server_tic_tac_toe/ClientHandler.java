@@ -3,17 +3,12 @@ import java.io.*;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import javafx.application.Platform;
-
-import org.apache.derby.jdbc.ClientDriver;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class ClientHandler extends Thread {
 
-  private final Socket socket;
+    private final Socket socket;
     private final ServerClass server;
     private final Connection con;
 
@@ -80,8 +75,10 @@ public class ClientHandler extends Thread {
                 case "new_round_request":
                 case "new_round_accept":
                 case "new_round_decline":
-                case "player_left":
                     return handleForwarding(json);
+                case "player_left":
+                    // Fix: Use dedicated handler for player_left to update status
+                    return handlePlayerLeft(json);
                 case "new_round":
                     return handleNewRound(json);
                 default:
@@ -112,6 +109,9 @@ public class ClientHandler extends Thread {
 
                        this.username = user;
                        server.getOnlineUsers().put(user, this);
+                       
+                       // Ensure user is marked as available on login
+                       updateAvailability(user, true);
 
                        broadcastUsersList();
 
@@ -134,7 +134,7 @@ public class ClientHandler extends Thread {
     private String handleRegister(JSONObject json) {
         try {
             String user = json.getString("username");
-            String email = json.getString("email"); // لو عندك حقل email
+            String email = json.getString("email"); 
             String pass = json.getString("password");
 
             String check = "SELECT * FROM USERS WHERE NAME=? OR EMAIL=?";
@@ -168,8 +168,27 @@ public class ClientHandler extends Thread {
 
     private String handleGetUsers() {
         JSONArray arr = new JSONArray();
-        for (String user : server.getOnlineUsers().keySet()) {
-            if (!user.equals(username)) arr.put(user);
+
+        String sql = "SELECT NAME, IS_AVAILABLE FROM USERS";
+
+        try (PreparedStatement pst = con.prepareStatement(sql);
+             ResultSet rs = pst.executeQuery()) {
+
+            while (rs.next()) {
+                String name = rs.getString("NAME");
+
+                if (!server.getOnlineUsers().containsKey(name)) continue;
+                if (name.equals(username)) continue;
+
+                JSONObject userObj = new JSONObject();
+                userObj.put("username", name);
+                userObj.put("is_available", rs.getInt("IS_AVAILABLE") == 1);
+
+                arr.put(userObj);
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
 
         JSONObject res = new JSONObject();
@@ -178,77 +197,83 @@ public class ClientHandler extends Thread {
         return res.toString();
     }
 
-    private void broadcastUsersList() {
-        for (ClientHandler ch : server.getOnlineUsers().values()) {
-            if (!ch.isConnected()) continue;
 
-            JSONArray arr = new JSONArray();
-            for (String user : server.getOnlineUsers().keySet()) {
-                if (!user.equals(ch.username)) arr.put(user);
+    public void broadcastUsersList() {
+        JSONArray arr = new JSONArray();
+
+        // Use a snapshot of keys to avoid concurrent modification issues if possible
+        for (String user : server.getOnlineUsers().keySet()) {
+
+            boolean isAvailable = true;
+            try (PreparedStatement pst = con.prepareStatement("SELECT IS_AVAILABLE FROM USERS WHERE NAME=?")) {
+                pst.setString(1, user);
+                ResultSet rs = pst.executeQuery();
+                if (rs.next()) {
+                    isAvailable = rs.getInt("IS_AVAILABLE") == 1;
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
             }
 
+            JSONObject userObj = new JSONObject();
+            userObj.put("username", user);
+            userObj.put("is_available", isAvailable);
+
+            arr.put(userObj);
+        }
+
+        for (ClientHandler ch : server.getOnlineUsers().values()) {
+            if (!ch.isConnected()) continue;
+            JSONArray filteredArr = new JSONArray();
+            // Send list of *other* users
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject u = arr.getJSONObject(i);
+                if (!u.getString("username").equals(ch.username)) {
+                    filteredArr.put(u);
+                }
+            }
             JSONObject update = new JSONObject();
             update.put("action", "users_list");
-            update.put("users", arr);
-
+            update.put("users", filteredArr);
             ch.sendMessage(update.toString());
         }
     }
 
+
+
     private String handleGameRequest(JSONObject json) {
         String from = json.getString("from");
         String to = json.getString("to");
-        System.out.println("from "+ from +" to "+ to);
+
+        String check = "SELECT IS_AVAILABLE FROM USERS WHERE NAME=?";
+
+        try (PreparedStatement pst = con.prepareStatement(check)) {
+            pst.setString(1, to);
+            ResultSet rs = pst.executeQuery();
+
+            if (rs.next() && rs.getInt("IS_AVAILABLE") == 0) {
+                return createErrorResponse("User is busy", "game_request");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
         ClientHandler target = server.getOnlineUsers().get(to);
         if (target != null) {
             JSONObject req = new JSONObject();
             req.put("action", "show_game_request");
             req.put("from", from);
-            req.put("to",to);
-            target.sendMessage(req.toString());
-        }
-        
-        JSONObject ack = new JSONObject();
-        ack.put("action", "game_request_response");
-        ack.put("success", true);
-        return ack.toString();
-    }
-    private String handleRequestResonse(JSONObject json) {
-        String from = json.getString("from");
-        String to = json.getString("to");
-        String response = json.getString("response");
-        ClientHandler target = server.getOnlineUsers().get(to);
-        if (target != null) {
-            JSONObject req = new JSONObject();
-            req.put("action", "request_response");
             req.put("to", to);
-            req.put("from", from);
-            req.put("response",response);
             target.sendMessage(req.toString());
-            System.out.println("Forwarding response to: " + to);
-        } else {
-            System.out.println("Target user " + to + " not found or offline.");
         }
-        
-        JSONObject ack = new JSONObject();
-        ack.put("action", "game_request_response");
-        ack.put("success", true);
-        return ack.toString();
+
+        return new JSONObject()
+                .put("action", "game_request_response")
+                .put("success", true)
+                .toString();
     }
 
-    private void handleLogout(JSONObject json) {
-        server.getOnlineUsers().remove(json.optString("username"));
-        broadcastUsersList();
-        cleanup();
-    }
 
-    private void handleUserDisconnection() {
-        if (username != null) {
-            server.getOnlineUsers().remove(username);
-            broadcastUsersList();
-        }
-        cleanup();
-    }
 
     private void cleanup() {
         try {
@@ -276,7 +301,7 @@ public class ClientHandler extends Thread {
         return res.toString();
     }
 
-    private void sendMessage(String msg) {
+    public void sendMessage(String msg) {
         try {
             writer.write(msg);
             writer.newLine();
@@ -325,15 +350,97 @@ public class ClientHandler extends Thread {
         return new JSONObject().put("success", true).toString();
     }
     
-    public void closeConnection() {
-    try {
-        if (socket != null && !socket.isClosed()) {
-            socket.close();
+    private String handlePlayerLeft(JSONObject json) {
+        String to = json.optString("to"); // Opponent name
+
+        if (this.username != null) {
+            updateAvailability(this.username, true);
         }
-        interrupt(); 
-    } catch (IOException e) {
-        e.printStackTrace();
+
+        if (to != null && !to.isEmpty()) {
+            updateAvailability(to, true);
+            
+            // 3. Notify opponent
+            ClientHandler target = server.getOnlineUsers().get(to);
+            if (target != null) {
+                target.sendMessage(json.toString());
+            }
+        }
+
+        broadcastUsersList();
+
+        return new JSONObject()
+                .put("action", "player_left_response")
+                .put("success", true)
+                .toString();
     }
-}
+    
+    public void closeConnection() {
+        try {
+            if (socket != null && !socket.isClosed()) {
+                socket.close();
+            }
+            interrupt(); 
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void updateAvailability(String user, boolean available) {
+        try (PreparedStatement pst = con.prepareStatement(
+                "UPDATE USERS SET IS_AVAILABLE=? WHERE NAME=?")) {
+            pst.setInt(1, available ? 1 : 0);
+            pst.setString(2, user);
+            pst.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+
+    private void handleLogout(JSONObject json) {
+        String user = json.optString("username");
+        server.getOnlineUsers().remove(user);
+        updateAvailability(user, true); 
+        broadcastUsersList(); 
+        
+        cleanup();
+    }
+
+    private void handleUserDisconnection() {
+        if (username != null) {
+            server.getOnlineUsers().remove(username);
+            updateAvailability(username, true); // Reset status 
+            broadcastUsersList();
+        }
+        cleanup();
+    }
+
+    private String handleRequestResonse(JSONObject json) {
+        String from = json.getString("from");
+        String to = json.getString("to");
+        String response = json.getString("response");
+        ClientHandler target = server.getOnlineUsers().get(to);
+
+        if (target != null) {
+            JSONObject req = new JSONObject();
+            req.put("action", "request_response");
+            req.put("to", to);
+            req.put("from", from);
+            req.put("response", response);
+            target.sendMessage(req.toString());
+        }
+
+        if ("accept".equals(response)) {
+            updateAvailability(from, false);
+            updateAvailability(to, false);
+            broadcastUsersList();
+        }
+
+        JSONObject ack = new JSONObject();
+        ack.put("action", "game_request_response");
+        ack.put("success", true);
+        return ack.toString();
+    }
 
 }

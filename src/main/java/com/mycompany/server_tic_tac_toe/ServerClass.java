@@ -13,6 +13,7 @@ import java.sql.SQLException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.derby.jdbc.ClientDriver;
+import org.json.JSONObject;
 
 /**
  *
@@ -27,7 +28,7 @@ public class ServerClass {
     private Connection con;
 
     public ServerClass() {
-        connectDB();
+        connectDB(); // Initial connection
     }
     public Map<String, ClientHandler> getOnlineUsers() {
         return onlineUsers;
@@ -40,22 +41,41 @@ public class ServerClass {
                     "root",
                     "root"
             );
+            System.out.println("Database connected successfully.");
         } catch (SQLException e) {
             e.printStackTrace();
         }
     }
 
     public Connection getConnection() {
+        // Ensure connection is valid before returning
+        try {
+            if (con == null || con.isClosed()) {
+                connectDB();
+            }
+        } catch (SQLException e) {
+            connectDB();
+        }
         return con;
     }
 
 
     public void startServerFunc() {
+        // Fix: Ensure DB is connected when starting server (in case it was closed on stop)
+        try {
+            if (con == null || con.isClosed()) {
+                connectDB();
+            }
+        } catch (SQLException e) {
+            connectDB();
+        }
+
         isRunning = true;
 
         new Thread(() -> {
             try {
                 serverSocket = new ServerSocket(5001);
+                System.out.println("Server started on port 5001");
                 while (isRunning) {
                     Socket socket = serverSocket.accept();
                     new ClientHandler(socket, this).start();
@@ -68,17 +88,25 @@ public class ServerClass {
 
     public void stopServerFunc() {
         isRunning = false;
+        
+        JSONObject json = new JSONObject();
+        json.put("action", "server_stopped");
+        String msg = json.toString();
 
         for (ClientHandler ch : onlineUsers.values()) {
-            ch.closeConnection();
+            if (ch.isConnected()) {
+                ch.sendMessage(msg);
+            }
+            ch.closeConnection(); 
         }
         onlineUsers.clear();
 
         try {
             if (serverSocket != null) serverSocket.close();
-            if (con != null) con.close();
+            if (con != null) con.close(); 
         } catch (Exception e) {
             e.printStackTrace();
         }
+        System.out.println("Server stopped.");
     }
 }

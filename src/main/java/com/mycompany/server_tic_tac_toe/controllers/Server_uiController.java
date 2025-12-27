@@ -58,7 +58,6 @@ public class Server_uiController implements Initializable {
         series.getData().add(new Data<>("Offline", 0));
         barChartGraph.getData().add(series);
 
-        // Setup Timeline for periodic updates (every 2 seconds)
         timeline = new Timeline(
                 new KeyFrame(Duration.seconds(2), event -> updateDashboard()));
         timeline.setCycleCount(Animation.INDEFINITE);

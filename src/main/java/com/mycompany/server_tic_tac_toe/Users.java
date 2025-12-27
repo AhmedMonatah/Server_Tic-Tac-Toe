@@ -47,11 +47,5 @@ public class Users {
     public String getCondfirmPassword() {
         return condfirmPassword;
     }
-    
-    
    
-    
-    
-    
-    
 }

@@ -22,8 +22,6 @@ public class ClientHandler extends Thread {
         this.con = server.getConnection();
     }
 
-
-    // ===== Thread run =====
     @Override
     public void run() {
         try {
@@ -50,7 +48,6 @@ public class ClientHandler extends Thread {
         }
     }
 
-    // ===== Handle requests =====
     private String processJsonRequest(String jsonReq) {
         try {
             JSONObject json = new JSONObject(jsonReq);

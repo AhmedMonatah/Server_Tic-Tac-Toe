@@ -131,23 +131,20 @@ public class ClientHandler extends Thread {
     private String handleRegister(JSONObject json) {
         try {
             String user = json.getString("username");
-            String email = json.getString("email");
             String pass = json.getString("password");
 
-            String check = "SELECT * FROM USERS WHERE NAME=? OR EMAIL=?";
+            String check = "SELECT * FROM USERS WHERE NAME=?";
             try (PreparedStatement pst = con.prepareStatement(check)) {
                 pst.setString(1, user);
-                pst.setString(2, email);
                 if (pst.executeQuery().next()) {
-                    return createErrorResponse("This username or email is already used", "register");
+                    return createErrorResponse("This username is already used", "register");
                 }
             }
 
-            String insert = "INSERT INTO USERS(NAME, EMAIL, PASSWORD) VALUES(?,?,?)";
+            String insert = "INSERT INTO USERS(NAME, PASSWORD) VALUES(?,?)";
             try (PreparedStatement pst = con.prepareStatement(insert)) {
                 pst.setString(1, user);
-                pst.setString(2, email);
-                pst.setString(3, pass);
+                pst.setString(2, pass);
                 pst.executeUpdate();
             }
 

@@ -84,6 +84,8 @@ public class ClientHandler extends Thread {
                     return handleForwarding(json);
                 case "new_round":
                     return handleNewRound(json);
+                case "set_availability":
+                    return handleIsAvailable(json);
                 default:
                     return createErrorResponse("Unknown action", action);
             }
@@ -91,6 +93,38 @@ public class ClientHandler extends Thread {
             e.printStackTrace();
             return createErrorResponse("Invalid JSON format", "error");
         }
+    }
+   private String handleIsAvailable(JSONObject json) {
+        String user = json.getString("username");
+        boolean isAvailable = json.getBoolean("isAvailable");
+
+        String query = "UPDATE USERS SET IS_AVAILABLE = ? WHERE NAME = ?";
+
+        try (PreparedStatement pst = con.prepareStatement(query)) {
+            pst.setBoolean(1, isAvailable);
+            pst.setString(2, user);
+
+            int rowsUpdated = pst.executeUpdate();
+
+            if (rowsUpdated > 0) {
+                JSONObject res = new JSONObject();
+                res.put("action", "availability_response");
+                res.put("success", true);
+                res.put("username", user);
+                res.put("isAvailable", isAvailable);
+
+                broadcastUsersList();
+
+                return res.toString();
+            } else {
+                return createErrorResponse("User not found", "availability");
+            }
+
+        } catch (SQLException ex) { 
+          System.getLogger(ClientHandler.class.getName()).log(System.Logger.Level.ERROR, (String) null, ex);
+      }
+
+        return createErrorResponse("Database error", "availability");
     }
 
     private String handleLogin(JSONObject json) {
@@ -165,26 +199,55 @@ public class ClientHandler extends Thread {
         }
     }
 
+    private boolean isUserAvailable(String username) {
+        String query = "SELECT IS_AVAILABLE FROM USERS WHERE NAME = ?";
+
+        try (PreparedStatement pst = con.prepareStatement(query)) {
+            pst.setString(1, username);
+            ResultSet rs = pst.executeQuery();
+
+            if (rs.next()) {
+                return rs.getBoolean("IS_AVAILABLE");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
 
     private String handleGetUsers() {
         JSONArray arr = new JSONArray();
+
         for (String user : server.getOnlineUsers().keySet()) {
-            if (!user.equals(username)) arr.put(user);
+            if (!user.equals(username)) {
+                JSONObject u = new JSONObject();
+                u.put("username", user);
+                u.put("isAvailable", isUserAvailable(user)); 
+                arr.put(u);
+            }
         }
 
         JSONObject res = new JSONObject();
         res.put("action", "users_list");
         res.put("users", arr);
+
         return res.toString();
     }
+
 
     private void broadcastUsersList() {
         for (ClientHandler ch : server.getOnlineUsers().values()) {
             if (!ch.isConnected()) continue;
 
             JSONArray arr = new JSONArray();
+
             for (String user : server.getOnlineUsers().keySet()) {
-                if (!user.equals(ch.username)) arr.put(user);
+                if (!user.equals(ch.username)) {
+                    JSONObject u = new JSONObject();
+                    u.put("username", user);
+                    u.put("isAvailable", isUserAvailable(user));
+                    arr.put(u);
+                }
             }
 
             JSONObject update = new JSONObject();
@@ -194,6 +257,7 @@ public class ClientHandler extends Thread {
             ch.sendMessage(update.toString());
         }
     }
+
 
     private String handleGameRequest(JSONObject json) {
         String from = json.getString("from");

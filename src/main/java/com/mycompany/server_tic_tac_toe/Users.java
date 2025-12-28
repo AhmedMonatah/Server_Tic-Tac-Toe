@@ -12,7 +12,7 @@ public class Users {
     private String userName;
     private String password;
     private String condfirmPassword;
-
+    
     public Users(String userName, String password) {
         this.userName = userName;
         this.password = password;

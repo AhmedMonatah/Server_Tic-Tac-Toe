@@ -8,6 +8,7 @@ import javafx.stage.Stage;
 
 import java.io.IOException;
 import static javafx.application.Application.launch;
+import javafx.scene.image.Image;
 
 public class App extends Application {
 
@@ -16,6 +17,8 @@ public class App extends Application {
     @Override
     public void start(Stage stage) throws IOException {
         scene = new Scene(loadFXML("server_ui"), 900, 600);
+        stage.getIcons().add(new Image(App.class.getResourceAsStream("/images/server.png")));
+        stage.setTitle("Server Tic-Tac-Toe");
         stage.setScene(scene);
         stage.show();
     }

@@ -69,6 +69,3 @@ Server_Tic-Tac-Toe
 │── Server_Tic-Tac-Toe.exe
 │── src/
 │── resources/
-
-
-1. Download the server executable file:

@@ -75,7 +75,6 @@ public class ClientHandler extends Thread {
                 case "new_round_decline":
                     return handleForwarding(json);
                 case "player_left":
-                    // Fix: Use dedicated handler for player_left to update status
                     return handlePlayerLeft(json);
                 case "new_round":
                     return handleNewRound(json);
@@ -106,9 +105,9 @@ public class ClientHandler extends Thread {
                         }
 
                         this.username = user;
+                        int userScore = rs.getInt("SCORE");
                         server.getOnlineUsers().put(user, this);
 
-                        // Ensure user is marked as available on login
                         updateAvailability(user, true);
 
                         broadcastUsersList();
@@ -117,6 +116,7 @@ public class ClientHandler extends Thread {
                         res.put("action", "login_response");
                         res.put("success", true);
                         res.put("username", user);
+                        res.put("score", userScore);
                         return res.toString();
                     }
                 }

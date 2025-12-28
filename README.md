@@ -73,7 +73,13 @@ The server manages client connections, game sessions, and communication between 
 - Ensure the firewall allows the server application if clients are on different machines.
 
 ---
+## 👥 Team Members
 
+- Omar Khaled
+- Ahmed Mohamed
+- Andrew Magdy
+- Sherry Ahmos
+  
 ## 📁 Project Structure
 
 ```text

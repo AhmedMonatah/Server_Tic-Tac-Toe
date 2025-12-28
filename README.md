@@ -1,3 +1,5 @@
+# <img src="https://github.com/user-attachments/assets/f5dafcf7-0b4b-4d58-971c-4040c6a0de19" width="40" /> Server_Tic-Tac-Toe
+
 # Server_Tic-Tac-Toe
 
 This project represents the **Server Application** for the Tic-Tac-Toe multiplayer game.  
@@ -9,9 +11,6 @@ The server manages client connections, game sessions, and communication between 
 
 ### Main Server Window
 ![Server UI](https://github.com/user-attachments/assets/2aba3e61-acf6-4bc9-acbd-de709e40971b)
-
-### Server Icon
-![Server Icon](https://github.com/user-attachments/assets/f5dafcf7-0b4b-4d58-971c-4040c6a0de19)
 
 ---
 
